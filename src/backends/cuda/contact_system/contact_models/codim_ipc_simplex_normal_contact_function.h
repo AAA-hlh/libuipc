@@ -14,12 +14,29 @@
 #include <contact_system/contact_models/analytical_barrier_pFpx/analytical_barrier_contact.h>
 #include <utils/distance/distance_flagged.h>
 #endif
+#include <limits>
 
 namespace uipc::backend::cuda
 {
 
 namespace corex_numgrad
 {
+    inline __device__ bool finite_value(Float value)
+    {
+        Float abs_value = value < static_cast<Float>(0) ? -value : value;
+        return value == value && abs_value <= std::numeric_limits<Float>::max();
+    }
+
+    template <int N>
+    inline __device__ bool finite_matrix(const Matrix<Float, N, N>& matrix)
+    {
+        for(int i = 0; i < N; ++i)
+            for(int j = 0; j < N; ++j)
+                if(!finite_value(matrix(i, j)))
+                    return false;
+        return true;
+    }
+
     template <size_t N>
     inline __device__ Float finite_diff_step(const Vector3 (&verts)[N], Float base_step)
     {
@@ -597,6 +614,89 @@ namespace sym::codim_ipc_simplex_contact
 
         G = Gradek * B + ek * GradB;
         H = Hessek * B + Gradek * GradB.transpose() + GradB * Gradek.transpose() + ek * HessB;
+
+#if defined(UIPC_COREX_CUDA10_COMPAT) && UIPC_COREX_CUDA10_COMPAT              \
+    && defined(UIPC_FLOAT_SCALAR) && UIPC_FLOAT_SCALAR
+        // Near parallel/degenerate edges, the analytic second derivative can
+        // contain NaN even though the energy and first derivative are finite.
+        // Recompute only those exceptional Hessians by differentiating the
+        // finite analytic gradient. This keeps the objective and gradient
+        // unchanged while giving Newton/PCG a usable curvature matrix.
+        if(!corex_numgrad::finite_matrix(H))
+        {
+            Vector3     verts[4] = {Ea0, Ea1, Eb0, Eb1};
+            const Float eps =
+                corex_numgrad::finite_diff_step(verts, static_cast<Float>(1e-3));
+            for(int j = 0; j < 12; ++j)
+            {
+                int     vj    = j / 3;
+                int     dj    = j % 3;
+                Vector3 vp[4] = {verts[0], verts[1], verts[2], verts[3]};
+                Vector3 vm[4] = {verts[0], verts[1], verts[2], verts[3]};
+                vp[vj](dj) += eps;
+                vm[vj](dj) -= eps;
+                Vector12 Gp;
+                Vector12 Gm;
+                mollified_EE_barrier_gradient(Gp,
+                                              flag,
+                                              kappa,
+                                              d_hat,
+                                              thickness,
+                                              t0_Ea0,
+                                              t0_Ea1,
+                                              t0_Eb0,
+                                              t0_Eb1,
+                                              vp[0],
+                                              vp[1],
+                                              vp[2],
+                                              vp[3]);
+                mollified_EE_barrier_gradient(Gm,
+                                              flag,
+                                              kappa,
+                                              d_hat,
+                                              thickness,
+                                              t0_Ea0,
+                                              t0_Ea1,
+                                              t0_Eb0,
+                                              t0_Eb1,
+                                              vm[0],
+                                              vm[1],
+                                              vm[2],
+                                              vm[3]);
+                for(int i = 0; i < 12; ++i)
+                    H(i, j) = (Gp(i) - Gm(i)) / (static_cast<Float>(2) * eps);
+            }
+            for(int i = 0; i < 12; ++i)
+                for(int j = i + 1; j < 12; ++j)
+                {
+                    Float value = static_cast<Float>(0.5) * (H(i, j) + H(j, i));
+                    H(i, j)     = value;
+                    H(j, i)     = value;
+                }
+
+            // Last-resort positive diagonal approximation. It is reached only
+            // if a perturbed gradient is also non-finite; line search still
+            // evaluates the original contact energy and gradient.
+            if(!corex_numgrad::finite_matrix(H))
+            {
+                Float max_abs_gradient = static_cast<Float>(0);
+                for(int i = 0; i < 12; ++i)
+                {
+                    Float value = G(i) < static_cast<Float>(0) ? -G(i) : G(i);
+                    if(corex_numgrad::finite_value(value) && value > max_abs_gradient)
+                        max_abs_gradient = value;
+                }
+                Float scale =
+                    max_abs_gradient
+                    / (d_hat > static_cast<Float>(1e-6) ? d_hat : static_cast<Float>(1e-6));
+                if(!corex_numgrad::finite_value(scale) || scale < static_cast<Float>(1))
+                    scale = static_cast<Float>(1);
+                for(int i = 0; i < 12; ++i)
+                    for(int j = 0; j < 12; ++j)
+                        H(i, j) = i == j ? scale : static_cast<Float>(0);
+            }
+        }
+#endif
 #endif
     }
 
