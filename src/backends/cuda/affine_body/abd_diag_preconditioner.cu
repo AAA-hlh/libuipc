@@ -55,7 +55,7 @@ __device__ inline bool corex_isfinite(Float v)
     // Avoid relying on a particular CUDA math-header overload in the CoreX
     // CUDA-10 compatibility compiler. NaN fails v==v; infinities exceed the
     // largest finite value.
-    return v == v && corex_abs(v) <= std::numeric_limits<Float>::max();
+    return v == v && (v < Float{0} ? -v : v) <= std::numeric_limits<Float>::max();
 }
 
 // In-place LDLT factorization for an SPD matrix stored column-major in `A`.

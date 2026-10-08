@@ -48,9 +48,8 @@ target_include_directories(cuda PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 # Select the complete backend implementation at compile time. CoreX builds use
 # the validated GIPC-native, matrix-free path; NVIDIA builds retain libuipc's
 # original explicit assembly path. These are platform policies rather than
-# user-selectable feature combinations. DLAN retains explicit assembly until
-# the CoreX-specific GIPC optimizations are validated on that SDK.
-if(UIPC_MUDA_USE_COREX AND NOT UIPC_MUDA_USE_DLAN)
+# user-selectable feature combinations.
+if(UIPC_MUDA_USE_COREX)
     target_compile_definitions(cuda PUBLIC
         UIPC_ENABLE_GIPC_FULL=1
         UIPC_ENABLE_GIPC_NATIVE_CONTACT=1

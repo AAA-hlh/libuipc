@@ -111,9 +111,11 @@ class LinearSystemHandles
     {
         if(m_pointer_mode_device)
             return;
+#ifndef UIPC_DLAN_COMPAT
         ensure_cusparse();
-        ensure_cublas();
         checkCudaErrors(cusparseSetPointerMode(m_cusparse, CUSPARSE_POINTER_MODE_DEVICE));
+#endif
+        ensure_cublas();
         checkCudaErrors(cublasSetPointerMode(m_cublas, CUBLAS_POINTER_MODE_DEVICE));
         m_pointer_mode_device = true;
     }
@@ -122,9 +124,11 @@ class LinearSystemHandles
     {
         if(!m_pointer_mode_device)
             return;
+#ifndef UIPC_DLAN_COMPAT
         ensure_cusparse();
-        ensure_cublas();
         checkCudaErrors(cusparseSetPointerMode(m_cusparse, CUSPARSE_POINTER_MODE_HOST));
+#endif
+        ensure_cublas();
         checkCudaErrors(cublasSetPointerMode(m_cublas, CUBLAS_POINTER_MODE_HOST));
         m_pointer_mode_device = false;
     }
