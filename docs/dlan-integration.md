@@ -12,9 +12,11 @@ Validation uses NovaPhy's IPC integration tests on KS38 hardware: free fall, gro
 
 ## Independent DLAN CI
 
-`DLAN PR` automatically builds pull requests and pushes to `main`/`master`,
-and supports manual runs. The previous `CoreX PR` and `CoreX Long Run`
-workflows remain available manually for Iluvatar hardware.
+`DLAN PR` is manually triggered only. Pull requests and pushes do not
+automatically queue a job waiting for a Denglin runner. The scripts below can
+run directly on a Denglin machine without registering a GitHub Actions runner.
+The `CoreX PR` and `CoreX Long Run` workflows also remain available manually
+for Iluvatar hardware.
 
 The DLAN workflow builds this libuipc checkout through a small CMake parent
 project under `tools/dlan_ci/`. It does not download a NovaPhy checkout or use

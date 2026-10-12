@@ -1,10 +1,8 @@
 name: DLAN PR
 
 on:
-  pull_request:
-    branches: ["**"]
-  push:
-    branches: [main, master]
+  # Run the scripts directly without registering a GitHub Actions runner.
+  # Dispatch this workflow only when a Denglin runner is available.
   workflow_dispatch:
 
 permissions:
